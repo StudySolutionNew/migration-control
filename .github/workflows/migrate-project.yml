@@ -1,0 +1,38 @@
+name: GitLab to GitHub Migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      gitlab_url:
+        description: "GitLab repository URL"
+        required: true
+      target_repo:
+        description: "GitHub target repository name"
+        required: true
+
+jobs:
+  migrate:
+    runs-on: [self-hosted, migration]
+
+    steps:
+      - name: Install git-client tools
+        run: |
+          sudo apt update
+          sudo apt install -y git
+
+      - name: Clone from GitLab (mirror)
+        run: |
+          git clone --mirror ${{ github.event.inputs.gitlab_url }} source-repo
+
+      - name: Create GitHub repo if not exists
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          gh repo view StudySolutionNew/${{ github.event.inputs.target_repo }} || \
+          gh repo create StudySolutionNew/${{ github.event.inputs.target_repo }} --private
+
+      - name: Push to GitHub (mirror)
+        run: |
+          cd source-repo
+          git remote set-url --push origin https://github.com/StudySolutionNew/${{ github.event.inputs.target_repo }}.git
+          git push --mirror
