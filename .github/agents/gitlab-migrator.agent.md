@@ -51,16 +51,42 @@ GitHub로 mirror push 합니다.
    - `<subgroup>-<project>`
    - 예: `backend-echo-api`, `backend-hello-api`, `frontend-simple-web`
 
-4. 이 리포지토리(`migration-control`)의
-   `migrate-project.yml` 워크플로우(또는 실제 파일 이름)를
-   **GitHub Actions API / 툴을 사용해 `workflow_dispatch`로 실행**합니다.
+4. 워크플로우 직접 호출 대신,
+   이 리포지토리(`migration-control`)의
+   `.github/migration-requests/<subgroup>-<project>.yml`
+   파일을 생성하거나 업데이트합니다.
 
-   - `gitlab_url` 입력에는 2번에서 만든 URL을 넣습니다.
-   - `target_repo` 입력에는 3번에서 만든 이름을 넣습니다.
+   - 파일이 없으면 새로 생성합니다.
+   - 파일이 이미 있으면 `last_sync_at` 필드를
+     현재 시간(ISO 포맷)으로 업데이트합니다.
 
-5. 워크플로우 실행이 시작되면,
-   사용자가 클릭해 볼 수 있도록 **워크플로우 실행 URL**을 알려주고
-   어떤 소스 → 어떤 타깃으로 옮기는지 한 줄로 요약해 줍니다.
+   예시 경로:
+   - backend hello-api →
+     `.github/migration-requests/backend-hello-api.yml`
+
+   예시 YAML 내용:
+   ```yaml
+   subgroup: backend
+   project: hello-api
+   gitlab_url: "http://20.64.230.118/studysolutiona/backend/hello-api.git"
+   target_repo: "backend-hello-api"
+   last_sync_at: "2025-12-10T21:05:00+09:00"
+
+5. 이 파일이 커밋 & 푸시되면,
+   .github/workflows/auto-migrate.yml 이 push 이벤트를 감지하여
+   migrate-project.yml 워크플로우를 workflow_dispatch로 호출합니다.
+   따라서 에이전트는 워크플로우를 직접 트리거하지 않고,
+   YAML 파일을 수정하는 것만으로 마이그레이션/동기화를 요청합니다.
+
+   Agent 행동 요약:
+   - **최초 요청**
+     → YAML 파일 생성 + last_sync_at 현재 시각
+     → GitHub push → auto-migrate → migrate-project 실행 → mirror
+
+   - **“다시 sync 해줘” 요청**
+     → 같은 YAML 파일의 last_sync_at만 현재 시각으로 변경
+     → GitHub push → auto-migrate → migrate-project 실행 → mirror
+   
 
 # 입력이 모호할 때
 
