@@ -15,17 +15,11 @@ jobs:
     runs-on: [self-hosted, migration]
 
     steps:
-      - name: Install git-client tools
+      - name: Install git & GitHub CLI
         run: |
           sudo apt update
-          sudo apt install -y git
-
-      - name: Install GitHub CLI
-        run: |
-          if ! command -v gh >/dev/null 2>&1; then
-            sudo apt update
-            sudo apt install -y gh
-          fi
+          sudo apt install -y git gh
+          git --version
           gh --version
 
       - name: Clone from GitLab (mirror)
