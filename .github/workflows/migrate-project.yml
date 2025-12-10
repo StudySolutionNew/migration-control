@@ -28,13 +28,6 @@ jobs:
           fi
           gh --version
 
-      - name: Authenticate GitHub CLI
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
-        run: |
-          echo "$GH_TOKEN" | gh auth login --with-token
-          gh auth status
-
       - name: Clone from GitLab (mirror)
         run: |
           git clone --mirror ${{ github.event.inputs.gitlab_url }} source-repo
