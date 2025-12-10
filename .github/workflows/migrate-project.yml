@@ -22,6 +22,12 @@ jobs:
           git --version
           gh --version
 
+      - name: Clean previous workspace
+        run: |
+          if [ -d "source-repo" ]; then
+            rm -rf source-repo
+          fi
+
       - name: Clone from GitLab (mirror)
         run: |
           git clone --mirror ${{ github.event.inputs.gitlab_url }} source-repo
