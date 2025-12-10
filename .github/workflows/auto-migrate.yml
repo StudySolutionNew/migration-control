@@ -1,0 +1,61 @@
+name: Auto GitLab Sync
+
+on:
+  push:
+    paths:
+      - ".github/migration-requests/*.yml"
+
+jobs:
+  trigger-migration:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Find changed migration request files
+        id: files
+        run: |
+          # 직전 커밋과 비교해서 변경된 migration-requests 파일만 찾는다
+          files=$(git diff --name-only HEAD^ HEAD | grep '.github/migration-requests/' || true)
+          echo "files=$files" >> $GITHUB_OUTPUT
+          echo "Changed files: $files"
+
+      - name: Trigger migration workflow for each file
+        if: steps.files.outputs.files != ''
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}       # 이미 만들어 둔 PAT 재사용
+          REPO: ${{ github.repository }}      # 예: StudySolutionNew/migration-control
+          REF: ${{ github.ref }}              # 예: refs/heads/main
+        run: |
+          set -e
+
+          ref="${REF#refs/heads/}"  # 'refs/heads/main' -> 'main'
+
+          echo "Using ref: $ref"
+          echo "Repository: $REPO"
+
+          # 공백으로 구분된 파일 리스트 순회
+          for file in ${{ steps.files.outputs.files }}; do
+            echo "Processing migration request file: $file"
+
+            gitlab_url=$(grep '^gitlab_url:' "$file" | awk '{print $2}' | tr -d '"')
+            target_repo=$(grep '^target_repo:' "$file" | awk '{print $2}' | tr -d '"')
+
+            echo "  gitlab_url  = $gitlab_url"
+            echo "  target_repo = $target_repo"
+
+            if [ -z "$gitlab_url" ] || [ -z "$target_repo" ]; then
+              echo "  -> gitlab_url 또는 target_repo가 비어 있어서 스킵합니다."
+              continue
+            fi
+
+            echo "  -> migrate-project.yml 워크플로우를 dispatch 합니다."
+
+            curl -s -X POST \
+              -H "Authorization: token ${GH_PAT}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/${REPO}/actions/workflows/migrate-project.yml/dispatches" \
+              -d "{\"ref\": \"${ref}\", \"inputs\": {\"gitlab_url\": \"${gitlab_url}\", \"target_repo\": \"${target_repo}\"}}"
+
+          done
