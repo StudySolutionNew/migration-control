@@ -20,6 +20,21 @@ jobs:
           sudo apt update
           sudo apt install -y git
 
+      - name: Install GitHub CLI
+        run: |
+          if ! command -v gh >/dev/null 2>&1; then
+            sudo apt update
+            sudo apt install -y gh
+          fi
+          gh --version
+
+      - name: Authenticate GitHub CLI
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          echo "$GH_TOKEN" | gh auth login --with-token
+          gh auth status
+
       - name: Clone from GitLab (mirror)
         run: |
           git clone --mirror ${{ github.event.inputs.gitlab_url }} source-repo
@@ -28,11 +43,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          gh repo view StudySolutionNew/${{ github.event.inputs.target_repo }} || \
-          gh repo create StudySolutionNew/${{ github.event.inputs.target_repo }} --private
+          set -e
+          if gh repo view StudySolutionNew/${{ github.event.inputs.target_repo }} >/dev/null 2>&1; then
+            echo "Repo already exists. Skipping create."
+          else
+            echo "Repo not found. Creating..."
+            gh repo create StudySolutionNew/${{ github.event.inputs.target_repo }} --private --confirm
+          fi
 
       - name: Push to GitHub (mirror)
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           cd source-repo
-          git remote set-url --push origin https://github.com/StudySolutionNew/${{ github.event.inputs.target_repo }}.git
+          git remote remove origin || true
+          git remote add origin https://x-access-token:${GH_PAT}@github.com/StudySolutionNew/${{ github.event.inputs.target_repo }}.git
           git push --mirror
