@@ -12,50 +12,77 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Find changed migration request files
         id: files
+        shell: bash
         run: |
-          # 직전 커밋과 비교해서 변경된 migration-requests 파일만 찾는다
-          files=$(git diff --name-only HEAD^ HEAD | grep '.github/migration-requests/' || true)
-          echo "files=$files" >> $GITHUB_OUTPUT
-          echo "Changed files: $files"
+          set -euo pipefail
+
+          before="${{ github.event.before }}"
+          after="${{ github.sha }}"
+
+          echo "before=$before"
+          echo "after=$after"
+
+          # 브랜치 첫 push 등 before가 0...이면 폴더 내 전체 파일 대상으로
+          if [[ "$before" == "0000000000000000000000000000000000000000" ]]; then
+            files=$(git ls-files ".github/migration-requests/*.yml" || true)
+          else
+            files=$(git diff --name-only "$before" "$after" -- ".github/migration-requests/*.yml" || true)
+          fi
+
+          echo "Changed files:"
+          echo "$files"
+
+          # 멀티라인 output으로 전달
+          {
+            echo "files<<EOF"
+            echo "$files"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Trigger migration workflow for each file
         if: steps.files.outputs.files != ''
         env:
-          GH_PAT: ${{ secrets.GH_PAT }}       # 이미 만들어 둔 PAT 재사용
-          REPO: ${{ github.repository }}      # 예: StudySolutionNew/migration-control
-          REF: ${{ github.ref }}              # 예: refs/heads/main
+          GH_PAT: ${{ secrets.GH_PAT }}
+          REPO: ${{ github.repository }}   # 예: StudySolutionNew/migration-control
+          REF: ${{ github.ref }}           # 예: refs/heads/main
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
-          ref="${REF#refs/heads/}"  # 'refs/heads/main' -> 'main'
+          ref="${REF#refs/heads/}"  # refs/heads/main -> main
 
           echo "Using ref: $ref"
           echo "Repository: $REPO"
 
-          # 공백으로 구분된 파일 리스트 순회
-          for file in ${{ steps.files.outputs.files }}; do
+          while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
+
             echo "Processing migration request file: $file"
 
+            # ✅ 기존 방식 유지 (grep/awk/tr)
             gitlab_url=$(grep '^gitlab_url:' "$file" | awk '{print $2}' | tr -d '"')
             target_repo=$(grep '^target_repo:' "$file" | awk '{print $2}' | tr -d '"')
 
             echo "  gitlab_url  = $gitlab_url"
             echo "  target_repo = $target_repo"
 
-            if [ -z "$gitlab_url" ] || [ -z "$target_repo" ]; then
+            if [[ -z "$gitlab_url" || -z "$target_repo" ]]; then
               echo "  -> gitlab_url 또는 target_repo가 비어 있어서 스킵합니다."
               continue
             fi
 
             echo "  -> migrate-project.yml 워크플로우를 dispatch 합니다."
 
-            curl -s -X POST \
+            curl -sSf -X POST \
               -H "Authorization: token ${GH_PAT}" \
-              -H "Accept: application/vnd.github.v3+json" \
+              -H "Accept: application/vnd.github+json" \
               "https://api.github.com/repos/${REPO}/actions/workflows/migrate-project.yml/dispatches" \
-              -d "{\"ref\": \"${ref}\", \"inputs\": {\"gitlab_url\": \"${gitlab_url}\", \"target_repo\": \"${target_repo}\"}}"
+              -d "{\"ref\":\"${ref}\",\"inputs\":{\"gitlab_url\":\"${gitlab_url}\",\"target_repo\":\"${target_repo}\"}}"
 
-          done
+            echo "  -> dispatch 요청 완료"
+          done <<< "${{ steps.files.outputs.files }}"
