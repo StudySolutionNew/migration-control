@@ -41,7 +41,7 @@ jobs:
             echo "Repo already exists. Skipping create."
           else
             echo "Repo not found. Creating..."
-            gh repo create StudySolutionNew/${{ github.event.inputs.target_repo }} --private --confirm
+            gh repo create StudySolutionNew/${{ github.event.inputs.target_repo }} --public --confirm
           fi
 
       - name: Push to GitHub (mirror)
