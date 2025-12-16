@@ -1,5 +1,0 @@
-subgroup: backend
-project: hello-api
-gitlab_url: "http://20.64.230.118/studysolutiona/backend/hello-api.git"
-target_repo: "backend-hello-api"
-last_sync_at: "2025-12-15T14:20:10+09:00"
