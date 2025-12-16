@@ -6,83 +6,62 @@ on:
       - ".github/migration-requests/*.yml"
 
 jobs:
-  trigger-migration:
+  prepare:
     runs-on: ubuntu-latest
-
+    outputs:
+      gitlab_url: ${{ steps.vars.outputs.gitlab_url }}
+      target_repo: ${{ steps.vars.outputs.target_repo }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 2
 
-      - name: Find changed migration request files
-        id: files
+      - name: Find changed migration request file
+        id: file
         shell: bash
         run: |
           set -euo pipefail
-
           before="${{ github.event.before }}"
           after="${{ github.sha }}"
 
-          echo "before=$before"
-          echo "after=$after"
-
-          # 브랜치 첫 push 등 before가 0...이면 폴더 내 전체 파일 대상으로
           if [[ "$before" == "0000000000000000000000000000000000000000" ]]; then
-            files=$(git ls-files ".github/migration-requests/*.yml" || true)
+            # 첫 push인 경우: 그냥 하나 고르기(여러 개면 최신 1개)
+            file=$(git ls-files ".github/migration-requests/*.yml" | tail -n 1 || true)
           else
-            files=$(git diff --name-only "$before" "$after" -- ".github/migration-requests/*.yml" || true)
+            file=$(git diff --name-only "$before" "$after" -- ".github/migration-requests/*.yml" | head -n 1 || true)
           fi
 
-          echo "Changed files:"
-          echo "$files"
+          if [[ -z "$file" ]]; then
+            echo "No migration request file changed."
+            exit 1
+          fi
 
-          # 멀티라인 output으로 전달
-          {
-            echo "files<<EOF"
-            echo "$files"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          echo "file=$file" >> "$GITHUB_OUTPUT"
+          echo "Changed file: $file"
 
-      - name: Trigger migration workflow for each file
-        if: steps.files.outputs.files != ''
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
-          REPO: ${{ github.repository }}   # 예: StudySolutionNew/migration-control
-          REF: ${{ github.ref }}           # 예: refs/heads/main
+      - name: Extract variables
+        id: vars
         shell: bash
         run: |
           set -euo pipefail
+          file="${{ steps.file.outputs.file }}"
 
-          ref="${REF#refs/heads/}"  # refs/heads/main -> main
+          gitlab_url=$(grep '^gitlab_url:' "$file" | awk '{print $2}' | tr -d '"')
+          target_repo=$(grep '^target_repo:' "$file" | awk '{print $2}' | tr -d '"')
 
-          echo "Using ref: $ref"
-          echo "Repository: $REPO"
+          if [[ -z "$gitlab_url" || -z "$target_repo" ]]; then
+            echo "gitlab_url or target_repo is empty. file=$file"
+            exit 1
+          fi
 
-          while IFS= read -r file; do
-            [[ -z "$file" ]] && continue
+          echo "gitlab_url=$gitlab_url" >> "$GITHUB_OUTPUT"
+          echo "target_repo=$target_repo" >> "$GITHUB_OUTPUT"
 
-            echo "Processing migration request file: $file"
-
-            # ✅ 기존 방식 유지 (grep/awk/tr)
-            gitlab_url=$(grep '^gitlab_url:' "$file" | awk '{print $2}' | tr -d '"')
-            target_repo=$(grep '^target_repo:' "$file" | awk '{print $2}' | tr -d '"')
-
-            echo "  gitlab_url  = $gitlab_url"
-            echo "  target_repo = $target_repo"
-
-            if [[ -z "$gitlab_url" || -z "$target_repo" ]]; then
-              echo "  -> gitlab_url 또는 target_repo가 비어 있어서 스킵합니다."
-              continue
-            fi
-
-            echo "  -> migrate-project.yml 워크플로우를 dispatch 합니다."
-
-            curl -sSf -X POST \
-              -H "Authorization: token ${GH_PAT}" \
-              -H "Accept: application/vnd.github+json" \
-              "https://api.github.com/repos/${REPO}/actions/workflows/migrate-project.yml/dispatches" \
-              -d "{\"ref\":\"${ref}\",\"inputs\":{\"gitlab_url\":\"${gitlab_url}\",\"target_repo\":\"${target_repo}\"}}"
-
-            echo "  -> dispatch 요청 완료"
-          done <<< "${{ steps.files.outputs.files }}"
+  migrate:
+    needs: prepare
+    uses: ./.github/workflows/migrate-project.yml
+    with:
+      gitlab_url: ${{ needs.prepare.outputs.gitlab_url }}
+      target_repo: ${{ needs.prepare.outputs.target_repo }}
+    secrets:
+      GH_PAT: ${{ secrets.GH_PAT }}
