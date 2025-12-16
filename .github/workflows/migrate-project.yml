@@ -42,18 +42,19 @@ jobs:
 
       - name: Clone from GitLab (mirror)
         run: |
-          git clone --mirror ${{ github.event.inputs.gitlab_url }} source-repo
+          git clone --mirror "${{ inputs.gitlab_url || github.event.inputs.gitlab_url }}" source-repo
 
       - name: Create GitHub repo if not exists
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           set -e
-          if gh repo view StudySolutionNew/${{ github.event.inputs.target_repo }} >/dev/null 2>&1; then
+          repo="StudySolutionNew/${{ inputs.target_repo || github.event.inputs.target_repo }}"
+          if gh repo view "$repo" >/dev/null 2>&1; then
             echo "Repo already exists. Skipping create."
           else
             echo "Repo not found. Creating..."
-            gh repo create StudySolutionNew/${{ github.event.inputs.target_repo }} --public --confirm
+            gh repo create "$repo" --public --confirm
           fi
 
       - name: Push to GitHub (mirror)
@@ -62,5 +63,6 @@ jobs:
         run: |
           cd source-repo
           git remote remove origin || true
-          git remote add origin https://x-access-token:${GH_PAT}@github.com/StudySolutionNew/${{ github.event.inputs.target_repo }}.git
+          repo="${{ inputs.target_repo || github.event.inputs.target_repo }}"
+          git remote add origin "https://x-access-token:${GH_PAT}@github.com/StudySolutionNew/${repo}.git"
           git push --mirror
