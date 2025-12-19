@@ -75,18 +75,34 @@ Trigger the `migrate-project.yml` workflow using GitHub CLI.
 **Workflow:** `.github/workflows/migrate-project.yml`  
 **Ref:** `main`
 
-### Execution Method
-1) Export PAT for GitHub CLI authentication:
+### Execution (must use execute/bash tool)
+Run these commands:
 
-export GH_TOKEN="${gitlabtogithubpat}"
+```bash
+set -euo pipefail
 
-2) Trigger workflow dispatch:
+# 1) validate token
+if [ -z "${gitlabtogithubpat:-}" ]; then
+  echo "ERROR: gitlabtogithubpat is not set"
+  exit 1
+fi
 
+# 2) authenticate gh using GH_TOKEN (required)
+export GH_TOKEN="$gitlabtogithubpat"
+
+# 3) (optional) confirm auth works (non-fatal if it prints limited info)
+gh auth status || true
+
+# 4) dispatch workflow
 gh workflow run migrate-project.yml \
   --repo StudySolutionNew/migration-control \
   --ref main \
   -f gitlab_url="http://20.64.230.118/studysolutiona/<subgroup>/<project>.git" \
   -f target_repo="<subgroup>-<project>"
+
+# 5) show latest runs (optional)
+gh run list --repo StudySolutionNew/migration-control --workflow=migrate-project.yml --limit 5
+```
 
 ### Notes
 The actual migration runs on a self-hosted runner (required for on-prem GitLab access).
