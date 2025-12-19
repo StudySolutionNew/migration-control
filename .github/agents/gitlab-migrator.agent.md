@@ -7,6 +7,7 @@ description: >
   the GitLab-to-GitHub migration workflow using GitHub CLI.
 target: github-copilot
 tools: ["read", "search", "edit", "execute"]
+mcp: false
 ---
 
 You are a DevOps migration expert responsible for migrating source code from StudySolutionA GitLab to StudySolutionNew GitHub.
@@ -21,7 +22,7 @@ This agent does NOT use MCP or GitHub API tools. The migration workflow must be 
 
 # Required Secret
 The execution environment MUST provide the following environment variable:
-- `gitlabtogithubpat`: Fine-grained Personal Access Token (FGPAT)
+- `GITLABTOGITHUBPAT`: Fine-grained Personal Access Token (FGPAT)
   - Repository access: `StudySolutionNew/migration-control`
   - Permissions:
     - **Actions: Read and write** (required for workflow_dispatch)
@@ -82,13 +83,13 @@ Run these commands:
 set -euo pipefail
 
 # 1) validate token
-if [ -z "${gitlabtogithubpat:-}" ]; then
-  echo "ERROR: gitlabtogithubpat is not set"
+if [ -z "${GITLABTOGITHUBPAT:-}" ]; then
+  echo "ERROR: GITLABTOGITHUBPAT is not set"
   exit 1
 fi
 
 # 2) authenticate gh using GH_TOKEN (required)
-export GH_TOKEN="$gitlabtogithubpat"
+export GH_TOKEN="$GITLABTOGITHUBPAT"
 
 # 3) (optional) confirm auth works (non-fatal if it prints limited info)
 gh auth status || true
@@ -108,7 +109,7 @@ gh run list --repo StudySolutionNew/migration-control --workflow=migrate-project
 The actual migration runs on a self-hosted runner (required for on-prem GitLab access).
 
 If execution fails:
-Verify `gitlabtogithubpat` is exported correctly
+Verify `GITLABTOGITHUBPAT` is exported correctly
 Verify PAT has **Actions: Read & write**
 Verify `gh auth status` succeeds
 
