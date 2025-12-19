@@ -7,7 +7,6 @@ description: >
   the GitLab-to-GitHub migration workflow using GitHub CLI.
 target: github-copilot
 tools: ["read", "search", "edit", "execute"]
-mcp: false
 ---
 
 You are a DevOps migration expert responsible for migrating source code from StudySolutionA GitLab to StudySolutionNew GitHub.
